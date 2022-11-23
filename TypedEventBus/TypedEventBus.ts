@@ -44,7 +44,7 @@ export class TypedEventBus {
 	}
 
 	public subscribe<E extends GenericEvent>(...eventClassArr: {
-		new (args?: any): E;
+		new (...args: any): E;
 		[EVENT_TYPE_KEY]: string;
 	}[]) {
 		return (callback: IEventCallback<InstanceType<new () => E>>): TSubscription => {
@@ -92,3 +92,15 @@ export class TypedEventBus {
 	}
 
 }
+
+// ---------------------
+
+export const TypedEvent = (eventType: string) => <E>(EventClass: new (...args: any[]) => object) => {
+	return class extends EventClass {
+		public static readonly [EVENT_TYPE_KEY] = eventType;
+	};
+};
+
+const a = new Map<{ new (...args: any): unknown }, string>();
+a.set(TypedEventBus, "hmm");
+
