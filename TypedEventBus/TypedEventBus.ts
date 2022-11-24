@@ -30,6 +30,8 @@ type TSubscription = {
 	unsubscribe: IUnsubscribe
 };
 
+type ValueOf<T> = T[keyof T];
+
 // ---------------------
 
 export class TypedEventBus {
@@ -43,29 +45,21 @@ export class TypedEventBus {
 		this._observable.subscribe(e => this.listener(e));
 	}
 
-	public subscribe<E extends GenericEvent>(...eventClassArr: {
-		new (args?: any): E;
+	public subscribe<E extends GenericEvent>(eventClass: {
+		new (...args: any): E;
 		[EVENT_TYPE_KEY]: string;
-	}[]) {
-		return (callback: IEventCallback<InstanceType<new () => E>>): TSubscription => {
+	}) {
+		return (callback: IEventCallback<InstanceType<new (...args: any) => E>>): TSubscription => {
 
 			this._subIdCounter ++;
 			const subsId = this._subIdCounter;
 
-			eventClassArr.forEach(({ 
-				[EVENT_TYPE_KEY]: eventType 
-			}) => {
-				if (!this._listeners[eventType]) this._listeners[eventType] = {};
-				this._listeners[eventType][subsId] = callback as IGenericEventCallback;
-			});
+			const eventType = eventClass[EVENT_TYPE_KEY];
+
+			if (!this._listeners[eventType]) this._listeners[eventType] = {};
+			this._listeners[eventType][subsId] = callback;
 			
-			return {
-				unsubscribe: () => {
-					eventClassArr.forEach(({ 
-						[EVENT_TYPE_KEY]: eventType 
-					}) => this.unsubscribe(eventType, subsId));
-				}
-			};
+			return { unsubscribe: () => this.unsubscribe(eventType, subsId)	};
 
 		};
 	}
