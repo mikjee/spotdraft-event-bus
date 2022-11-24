@@ -17,3 +17,7 @@ events.subscribe(EventB)(e => console.log(e.payload));
 
 s.next(new EventA(["hello", "world"]));
 s.next(new EventB());
+
+
+
+

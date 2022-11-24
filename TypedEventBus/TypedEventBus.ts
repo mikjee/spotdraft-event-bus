@@ -2,25 +2,13 @@ import { Observable } from 'rxjs';
 
 // -------------------------
 
-export const EVENT_TYPE_KEY = "__event__";
-
-abstract class GenericEvent {
-	public static readonly [EVENT_TYPE_KEY]: unknown;
-}
-
 interface IGenericEventCallback {
 	(e: any): void;
 }
 
-interface IEventCallback<E extends GenericEvent> {
+interface IEventCallback<E> {
 	(e: E): void;
 }
-
-type TSubscriberMap = {
-	[eventType: string]: {
-		[subId: number]: IGenericEventCallback;
-	}
-};
 
 interface IUnsubscribe {
 	(): void
@@ -30,59 +18,51 @@ type TSubscription = {
 	unsubscribe: IUnsubscribe
 };
 
-type ValueOf<T> = T[keyof T];
-
 // ---------------------
 
 export class TypedEventBus {
 
-	private _listeners: TSubscriberMap = {};
 	private _observable: Observable<unknown>;
 	private _subIdCounter: number = 0;
+
+	private _classMap = new Map<{ new (...args: any): unknown }, {
+		[subId: number]: IGenericEventCallback;
+	}>();
 
 	constructor(o: InstanceType<typeof Observable<unknown>>) {
 		this._observable = o;
 		this._observable.subscribe(e => this.listener(e));
 	}
 
-	public subscribe<E extends GenericEvent>(eventClass: {
+	public subscribe<E>(eventClass: {
 		new (...args: any): E;
-		[EVENT_TYPE_KEY]: string;
 	}) {
-		return (callback: IEventCallback<InstanceType<new (...args: any) => E>>): TSubscription => {
-
+		return (callback: IEventCallback<E>): TSubscription => {
 			this._subIdCounter ++;
 			const subsId = this._subIdCounter;
 
-			const eventType = eventClass[EVENT_TYPE_KEY];
+			if (!this._classMap.has(eventClass)) this._classMap.set(eventClass, {});
+			const subscriptionMap = this._classMap.get(eventClass);
+			subscriptionMap![subsId] = callback;
 
-			if (!this._listeners[eventType]) this._listeners[eventType] = {};
-			this._listeners[eventType][subsId] = callback;
-			
-			return { unsubscribe: () => this.unsubscribe(eventType, subsId)	};
-
+			return { unsubscribe: () => this.unsubscribe(eventClass, subsId) };
 		};
 	}
 
-	private unsubscribe(eventType: string, subsId: number) {
-		const listenersObj = this._listeners[eventType];
-		if (typeof listenersObj !== 'object') return;
-
-		delete listenersObj[subsId];
+	private unsubscribe<E>(eventClass: {new (...args: any): E}, subsId: number) {
+		if (!this._classMap.has(eventClass)) return;
+		const subscriptionMap = this._classMap.get(eventClass);
+		delete subscriptionMap![subsId];
 	}
 
 	private listener(e: any): void {
-
-		const eventType = Object.getPrototypeOf(e)?.constructor?.[EVENT_TYPE_KEY];
-		if (typeof eventType !== 'string') return;
-
-		const listenersObj = this._listeners[eventType];
-		if (typeof listenersObj !== 'object') return;
+		const eventClass = Object.getPrototypeOf(e)?.constructor;
+		if (!this._classMap.has(eventClass)) return;
+		const subscriptionMap = this._classMap.get(eventClass);
 
 		Object
-			.values(listenersObj)
+			.values(subscriptionMap!)
 			.forEach(callback => callback(e));
-
 	}
 
 }
